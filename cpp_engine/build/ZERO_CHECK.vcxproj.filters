@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\vedan\OneDrive\Desktop\ds1cpsmartmeet\cpp_engine\build\CMakeFiles\a7e69be8ad24400bee16c66f57894651\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{1342385F-CD14-3062-8468-3DA1C03F0ABD}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

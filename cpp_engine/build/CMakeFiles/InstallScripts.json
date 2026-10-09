@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/vedan/OneDrive/Desktop/ds1cpsmartmeet/cpp_engine/build/cmake_install.cmake",
+		"C:/Users/vedan/OneDrive/Desktop/ds1cpsmartmeet/cpp_engine/build/_deps/json-build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -1,0 +1,10 @@
+^C:\USERS\VEDAN\ONEDRIVE\DESKTOP\DS1CPSMARTMEET\CPP_ENGINE\BUILD\CMAKEFILES\A7E69BE8AD24400BEE16C66F57894651\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/vedan/OneDrive/Desktop/ds1cpsmartmeet/cpp_engine -BC:/Users/vedan/OneDrive/Desktop/ds1cpsmartmeet/cpp_engine/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/vedan/OneDrive/Desktop/ds1cpsmartmeet/cpp_engine/build/SmartMeetContactEngine.slnx
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
