@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 
+import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 
 class ContactsScreen extends StatefulWidget {
@@ -11,12 +11,21 @@ class ContactsScreen extends StatefulWidget {
 
 class _ContactsScreenState extends State<ContactsScreen> {
   List<dynamic> contacts = [];
-  bool loading = true;
-  String error = '';
+  List<dynamic> allContacts = [];
+
+  bool isLoading = true;
   String selectedCategory = 'All';
 
-  final TextEditingController searchController =
-      TextEditingController();
+  final TextEditingController searchController = TextEditingController();
+
+  final List<String> categories = [
+    'All',
+    'Friend',
+    'Company Colleague',
+    'Student',
+    'Family',
+    'Organization',
+  ];
 
   @override
   void initState() {
@@ -24,222 +33,428 @@ class _ContactsScreenState extends State<ContactsScreen> {
     loadContacts();
   }
 
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  String getValue(dynamic contact, String key) {
+    if (contact is! Map) return '';
+
+    final value = contact[key];
+    return value == null ? '' : value.toString();
+  }
+
+  int getId(dynamic contact) {
+    final value = contact['id'];
+
+    if (value is int) return value;
+
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  bool getFavorite(dynamic contact) {
+    final value = contact['is_favorite'];
+
+    return value == true || value == 1 || value == '1';
+  }
+
+  String getFullName(dynamic contact) {
+    final firstName = getValue(contact, 'first_name').trim();
+    final lastName = getValue(contact, 'last_name').trim();
+
+    return '$firstName $lastName'.trim();
+  }
+
+  void showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   Future<void> loadContacts() async {
+    if (!mounted) return;
+
     setState(() {
-      loading = true;
-      error = '';
+      isLoading = true;
     });
 
     try {
       final result = await ApiService.getContacts();
 
+      if (!mounted) return;
+
       setState(() {
-        contacts = result;
-        loading = false;
+        allContacts = result;
       });
+
+      applyFilters();
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
-        error = 'Could not load contacts';
-        loading = false;
+        isLoading = false;
       });
+
+      showMessage('Failed to load contacts: $e');
     }
   }
 
-  Future<void> searchContacts(String value) async {
-    if (value.trim().isEmpty) {
-      await loadContacts();
-      return;
-    }
+  void applyFilters() {
+    if (!mounted) return;
+
+    final query = searchController.text.trim().toLowerCase();
+
+    final filteredContacts = allContacts.where((contact) {
+      final firstName =
+          getValue(contact, 'first_name').toLowerCase();
+
+      final lastName =
+          getValue(contact, 'last_name').toLowerCase();
+
+      final fullName = getFullName(contact).toLowerCase();
+
+      final phone =
+          getValue(contact, 'phone').toLowerCase();
+
+      final email =
+          getValue(contact, 'email').toLowerCase();
+
+      final company =
+          getValue(contact, 'company').toLowerCase();
+
+      final category =
+          getValue(contact, 'category').toLowerCase();
+
+      final matchesSearch = query.isEmpty ||
+          firstName.contains(query) ||
+          lastName.contains(query) ||
+          fullName.contains(query) ||
+          phone.contains(query) ||
+          email.contains(query) ||
+          company.contains(query);
+
+      final matchesCategory = selectedCategory == 'All' ||
+          category == selectedCategory.toLowerCase();
+
+      return matchesSearch && matchesCategory;
+    }).toList();
 
     setState(() {
-      loading = true;
-      error = '';
+      contacts = filteredContacts;
+      isLoading = false;
+    });
+  }
+
+  Future<void> searchContacts(String query) async {
+    applyFilters();
+  }
+
+  Future<void> searchByCategory(String category) async {
+    setState(() {
+      selectedCategory = category;
+      isLoading = true;
     });
 
     try {
-      final result =
-          await ApiService.searchContacts(value.trim());
+      final result = await ApiService.getContacts();
 
-      setState(() {
-        contacts = result;
-        loading = false;
-      });
+      if (!mounted) return;
+
+      allContacts = result;
+      applyFilters();
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
-        error = 'Could not search contacts';
-        loading = false;
+        isLoading = false;
       });
+
+      showMessage('Failed to filter contacts: $e');
     }
   }
-    
-   
-  Future<void> searchByCategory(String category) async {
-  setState(() {
-    selectedCategory = category;
-  });
 
-  if (category == 'All') {
-    await loadContacts();
-    return;
-  }
+  Future<void> showContactDialog({dynamic contact}) async {
+    final bool isEditing = contact != null;
+    final formKey = GlobalKey<FormState>();
 
-  try {
-    final results =
-        await ApiService.searchContactsByCategory(category);
+    final firstNameController = TextEditingController(
+      text: isEditing ? getValue(contact, 'first_name') : '',
+    );
 
-    setState(() {
-      contacts = results;
-    });
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to load contacts by category'),
-        ),
-      );
+    final lastNameController = TextEditingController(
+      text: isEditing ? getValue(contact, 'last_name') : '',
+    );
+
+    final emailController = TextEditingController(
+      text: isEditing ? getValue(contact, 'email') : '',
+    );
+
+    final phoneController = TextEditingController(
+      text: isEditing ? getValue(contact, 'phone') : '',
+    );
+
+    final companyController = TextEditingController(
+      text: isEditing ? getValue(contact, 'company') : '',
+    );
+
+    final jobTitleController = TextEditingController(
+      text: isEditing ? getValue(contact, 'job_title') : '',
+    );
+
+    final notesController = TextEditingController(
+      text: isEditing ? getValue(contact, 'notes') : '',
+    );
+
+    String selectedContactCategory =
+        isEditing ? getValue(contact, 'category') : 'Friend';
+
+    if (!categories.contains(selectedContactCategory) ||
+        selectedContactCategory == 'All') {
+      selectedContactCategory = 'Friend';
     }
-  }
-}
 
-  void showAddContactDialog() {
-    final firstNameController = TextEditingController();
-    final lastNameController = TextEditingController();
-    final emailController = TextEditingController();
-    final phoneController = TextEditingController();
-    final companyController = TextEditingController();
-    final jobTitleController = TextEditingController();
-    final categoryController = TextEditingController();
-    final notesController = TextEditingController();
+    bool favorite = isEditing ? getFavorite(contact) : false;
+    bool isSaving = false;
 
-    bool favorite = false;
-
-    showDialog(
+    await showDialog<void>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Add Contact'),
+              title: Text(
+                isEditing ? 'Edit Contact' : 'Add Contact',
+              ),
               content: SizedBox(
-                width: 450,
+                width: 400,
                 child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: firstNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'First Name',
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: firstNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'First Name *',
+                            prefixIcon: Icon(Icons.person),
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) {
+                            if (value == null ||
+                                value.trim().isEmpty) {
+                              return 'Enter first name';
+                            }
+
+                            return null;
+                          },
                         ),
-                      ),
-                      TextField(
-                        controller: lastNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Last Name',
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: lastNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Last Name',
+                            prefixIcon: Icon(Icons.person_outline),
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                      ),
-                      TextField(
-                        controller: emailController,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            labelText: 'Mobile Number',
+                            prefixIcon: Icon(Icons.phone),
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                      ),
-                      TextField(
-                        controller: phoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'Phone',
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            prefixIcon: Icon(Icons.email),
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                      ),
-                      TextField(
-                        controller: companyController,
-                        decoration: const InputDecoration(
-                          labelText: 'Company',
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: companyController,
+                          decoration: const InputDecoration(
+                            labelText: 'Company',
+                            prefixIcon: Icon(Icons.business),
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                      ),
-                      TextField(
-                        controller: jobTitleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Job Title',
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: jobTitleController,
+                          decoration: const InputDecoration(
+                            labelText: 'Job Title',
+                            prefixIcon: Icon(Icons.work),
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                      ),
-                      TextField(
-                        controller: categoryController,
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedContactCategory,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Category',
+                            prefixIcon: Icon(Icons.category),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: categories
+                              .where((category) => category != 'All')
+                              .map((category) {
+                            return DropdownMenuItem<String>(
+                              value: category,
+                              child: Text(category),
+                            );
+                          }).toList(),
+                          onChanged: isSaving
+                              ? null
+                              : (value) {
+                                  if (value != null) {
+                                    setDialogState(() {
+                                      selectedContactCategory = value;
+                                    });
+                                  }
+                                },
                         ),
-                      ),
-                      TextField(
-                        controller: notesController,
-                        decoration: const InputDecoration(
-                          labelText: 'Notes',
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: notesController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'Notes',
+                            prefixIcon: Icon(Icons.notes),
+                            border: OutlineInputBorder(),
+                          ),
                         ),
-                        maxLines: 3,
-                      ),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Favorite'),
-                        value: favorite,
-                        onChanged: (value) {
-                          setDialogState(() {
-                            favorite = value ?? false;
-                          });
-                        },
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Favorite Contact'),
+                          value: favorite,
+                          controlAffinity:
+                              ListTileControlAffinity.leading,
+                          onChanged: isSaving
+                              ? null
+                              : (value) {
+                                  setDialogState(() {
+                                    favorite = value ?? false;
+                                  });
+                                },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: isSaving
+                      ? null
+                      : () {
+                          Navigator.of(dialogContext).pop();
+                        },
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: () async {
-                    if (firstNameController.text.trim().isEmpty) {
-                      return;
-                    }
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) {
+                            return;
+                          }
 
-                    try {
-                      await ApiService.createContact(
-                        firstName:
-                            firstNameController.text.trim(),
-                        lastName:
-                            lastNameController.text.trim(),
-                        email:
-                            emailController.text.trim(),
-                        phone:
-                            phoneController.text.trim(),
-                        company:
-                            companyController.text.trim(),
-                        jobTitle:
-                            jobTitleController.text.trim(),
-                        category:
-                            categoryController.text.trim(),
-                        favorite: favorite,
-                        notes:
-                            notesController.text.trim(),
-                      );
+                          setDialogState(() {
+                            isSaving = true;
+                          });
 
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                      }
+                          try {
+                            if (isEditing) {
+                              await ApiService.updateContact(
+                                id: getId(contact),
+                                firstName:
+                                    firstNameController.text.trim(),
+                                lastName:
+                                    lastNameController.text.trim(),
+                                email: emailController.text.trim(),
+                                phone: phoneController.text.trim(),
+                                company:
+                                    companyController.text.trim(),
+                                jobTitle:
+                                    jobTitleController.text.trim(),
+                                category: selectedContactCategory,
+                                favorite: favorite,
+                                notes: notesController.text.trim(),
+                              );
+                            } else {
+                              await ApiService.createContact(
+                                firstName:
+                                    firstNameController.text.trim(),
+                                lastName:
+                                    lastNameController.text.trim(),
+                                email: emailController.text.trim(),
+                                phone: phoneController.text.trim(),
+                                company:
+                                    companyController.text.trim(),
+                                jobTitle:
+                                    jobTitleController.text.trim(),
+                                category: selectedContactCategory,
+                                favorite: favorite,
+                                notes: notesController.text.trim(),
+                              );
+                            }
 
-                      await loadContacts();
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Failed to create contact'),
+                            if (!dialogContext.mounted) return;
+
+                            Navigator.of(dialogContext).pop();
+
+                            await loadContacts();
+
+                            if (!mounted) return;
+
+                            showMessage(
+                              isEditing
+                                  ? 'Contact updated successfully'
+                                  : 'Contact added successfully',
+                            );
+                          } catch (e) {
+                            if (!dialogContext.mounted) return;
+
+                            setDialogState(() {
+                              isSaving = false;
+                            });
+
+                            ScaffoldMessenger.of(dialogContext)
+                                .showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isEditing
+                                      ? 'Failed to update contact: $e'
+                                      : 'Failed to create contact: $e',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
                           ),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Save'),
+                        )
+                      : Text(isEditing ? 'Update' : 'Save'),
                 ),
               ],
             );
@@ -247,32 +462,42 @@ class _ContactsScreenState extends State<ContactsScreen> {
         );
       },
     );
+
+    firstNameController.dispose();
+    lastNameController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    companyController.dispose();
+    jobTitleController.dispose();
+    notesController.dispose();
   }
 
-    Future<void> deleteContact(
-    Map<String, dynamic> contact,
-  ) async {
-    final firstName = contact['first_name'] ?? '';
-    final lastName = contact['last_name'] ?? '';
+  Future<void> deleteContact(dynamic contact) async {
+    final contactName = getFullName(contact);
+    final id = getId(contact);
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Delete Contact'),
           content: Text(
-            'Are you sure you want to delete $firstName $lastName?',
+            'Are you sure you want to delete $contactName?',
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(context, false);
+                Navigator.of(dialogContext).pop(false);
               },
               child: const Text('Cancel'),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
               onPressed: () {
-                Navigator.pop(context, true);
+                Navigator.of(dialogContext).pop(true);
               },
               child: const Text('Delete'),
             ),
@@ -281,221 +506,230 @@ class _ContactsScreenState extends State<ContactsScreen> {
       },
     );
 
-    if (confirmed != true) {
-      return;
-    }
+    if (confirmed != true || !mounted) return;
 
     try {
-      await ApiService.deleteContact(contact['id']);
+      await ApiService.deleteContact(id);
+
+      if (!mounted) return;
 
       await loadContacts();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Contact deleted'),
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      showMessage('Contact deleted successfully');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to delete contact'),
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      showMessage('Failed to delete contact: $e');
     }
   }
 
-  void showEditContactDialog(
-    Map<String, dynamic> contact,
-  ) {
-    final firstNameController =
-        TextEditingController(
-      text: contact['first_name'] ?? '',
-    );
+  Future<void> toggleFavorite(dynamic contact) async {
+    final id = getId(contact);
+    final newFavorite = !getFavorite(contact);
 
-    final lastNameController =
-        TextEditingController(
-      text: contact['last_name'] ?? '',
-    );
+    try {
+      await ApiService.updateContact(
+        id: id,
+        firstName: getValue(contact, 'first_name'),
+        lastName: getValue(contact, 'last_name'),
+        email: getValue(contact, 'email'),
+        phone: getValue(contact, 'phone'),
+        company: getValue(contact, 'company'),
+        jobTitle: getValue(contact, 'job_title'),
+        category: getValue(contact, 'category'),
+        favorite: newFavorite,
+        notes: getValue(contact, 'notes'),
+      );
 
-    final emailController =
-        TextEditingController(
-      text: contact['email'] ?? '',
-    );
+      if (!mounted) return;
 
-    final phoneController =
-        TextEditingController(
-      text: contact['phone'] ?? '',
-    );
+      await loadContacts();
+    } catch (e) {
+      if (!mounted) return;
 
-    final companyController =
-        TextEditingController(
-      text: contact['company'] ?? '',
-    );
+      showMessage('Failed to update favorite: $e');
+    }
+  }
 
-    final jobTitleController =
-        TextEditingController(
-      text: contact['job_title'] ?? '',
-    );
+  Widget contactDetail({
+    required IconData icon,
+    required String value,
+  }) {
+    if (value.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-    final categoryController =
-        TextEditingController(
-      text: contact['category'] ?? '',
-    );
-
-    final notesController =
-        TextEditingController(
-      text: contact['notes'] ?? '',
-    );
-
-    bool favorite =
-        contact['is_favorite'] == true ||
-        contact['is_favorite'] == 1;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Edit Contact'),
-              content: SizedBox(
-                width: 450,
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: firstNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'First Name',
-                        ),
-                      ),
-                      TextField(
-                        controller: lastNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Last Name',
-                        ),
-                      ),
-                      TextField(
-                        controller: emailController,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                        ),
-                      ),
-                      TextField(
-                        controller: phoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'Phone',
-                        ),
-                      ),
-                      TextField(
-                        controller: companyController,
-                        decoration: const InputDecoration(
-                          labelText: 'Company',
-                        ),
-                      ),
-                      TextField(
-                        controller: jobTitleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Job Title',
-                        ),
-                      ),
-                      TextField(
-                        controller: categoryController,
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
-                        ),
-                      ),
-                      TextField(
-                        controller: notesController,
-                        decoration: const InputDecoration(
-                          labelText: 'Notes',
-                        ),
-                        maxLines: 3,
-                      ),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Favorite'),
-                        value: favorite,
-                        onChanged: (value) {
-                          setDialogState(() {
-                            favorite = value ?? false;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (firstNameController.text.trim().isEmpty) {
-                      return;
-                    }
-
-                    try {
-                      await ApiService.updateContact(
-                        id: contact['id'],
-                        firstName:
-                            firstNameController.text.trim(),
-                        lastName:
-                            lastNameController.text.trim(),
-                        email:
-                            emailController.text.trim(),
-                        phone:
-                            phoneController.text.trim(),
-                        company:
-                            companyController.text.trim(),
-                        jobTitle:
-                            jobTitleController.text.trim(),
-                        category:
-                            categoryController.text.trim(),
-                        favorite: favorite,
-                        notes:
-                            notesController.text.trim(),
-                      );
-
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                      }
-
-                      await loadContacts();
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(
-                          const SnackBar(
-                            content:
-                                Text('Failed to update contact'),
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text('Update'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: Colors.blueGrey,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
+  Widget buildContactCard(dynamic contact) {
+    final fullName = getFullName(contact);
+    final phone = getValue(contact, 'phone');
+    final email = getValue(contact, 'email');
+    final company = getValue(contact, 'company');
+    final jobTitle = getValue(contact, 'job_title');
+    final category = getValue(contact, 'category');
+    final favorite = getFavorite(contact);
+
+    final displayName =
+        fullName.isEmpty ? 'Unnamed Contact' : fullName;
+
+    final initials = fullName.isEmpty
+        ? '?'
+        : fullName
+            .trim()
+            .split(RegExp(r'\s+'))
+            .take(2)
+            .map((part) => part.isNotEmpty ? part[0] : '')
+            .join()
+            .toUpperCase();
+
+    return Card(
+      margin: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 6,
+      ),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  child: Text(initials),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    displayName,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: favorite
+                      ? 'Remove from favorites'
+                      : 'Add to favorites',
+                  onPressed: () => toggleFavorite(contact),
+                  icon: Icon(
+                    favorite ? Icons.star : Icons.star_border,
+                    color: favorite ? Colors.amber : Colors.grey,
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      showContactDialog(contact: contact);
+                    } else if (value == 'delete') {
+                      deleteContact(contact);
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit),
+                          SizedBox(width: 8),
+                          Text('Edit'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete,
+                            color: Colors.red,
+                          ),
+                          SizedBox(width: 8),
+                          Text('Delete'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            contactDetail(
+              icon: Icons.phone,
+              value: phone,
+            ),
+            contactDetail(
+              icon: Icons.email,
+              value: email,
+            ),
+            contactDetail(
+              icon: Icons.business,
+              value: company,
+            ),
+            contactDetail(
+              icon: Icons.work,
+              value: jobTitle,
+            ),
+            if (category.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    label: Text(category),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildCategoryFilters() {
+    return SizedBox(
+      height: 54,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: categories.map((category) {
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(category),
+              selected: selectedCategory == category,
+              onSelected: (_) {
+                searchByCategory(category);
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   @override
@@ -505,134 +739,86 @@ class _ContactsScreenState extends State<ContactsScreen> {
         title: const Text('Contacts'),
         actions: [
           IconButton(
-            onPressed: showAddContactDialog,
-            icon: const Icon(Icons.person_add),
-            tooltip: 'Add Contact',
+            tooltip: 'Refresh contacts',
+            onPressed: loadContacts,
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            TextField(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showContactDialog(),
+        tooltip: 'Add Contact',
+        child: const Icon(Icons.person_add),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
               controller: searchController,
+              onChanged: searchContacts,
               decoration: InputDecoration(
-                hintText: 'Search contacts...',
+                hintText:
+                    'Search by first name, last name, phone, email...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
+                  tooltip: 'Clear search',
                   onPressed: () {
                     searchController.clear();
-                    loadContacts();
+                    applyFilters();
                   },
+                  icon: const Icon(Icons.clear),
                 ),
-                border: const OutlineInputBorder(),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-              onSubmitted: searchContacts,
             ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: loading
-                  ? const Center(
-                      child: CircularProgressIndicator(),
-                    )
-                  : error.isNotEmpty
-                      ? Center(
-                          child: Text(error),
-                        )
-                      : contacts.isEmpty
-                          ? const Center(
-                              child: Text('No contacts found'),
-                            )
-                          : ListView.builder(
-                              itemCount: contacts.length,
-                              itemBuilder: (context, index) {
-                                final contact =
-                                    Map<String, dynamic>.from(
-                                  contacts[index],
-                                );
-
-                                final firstName =
-                                    contact['first_name'] ?? '';
-
-                                final lastName =
-                                    contact['last_name'] ?? '';
-
-                                final email =
-                                    contact['email'] ?? '';
-
-                                final company =
-                                    contact['company'] ?? '';
-
-                                final favorite =
-                                    contact['is_favorite'] ==
-                                        true ||
-                                    contact['is_favorite'] == 1;
-
-                                return Card(
-                                  margin:
-                                      const EdgeInsets.only(
-                                    bottom: 12,
-                                  ),
-                                  child: ListTile(
-                                    leading: CircleAvatar(
-                                      child: Text(
-                                        firstName.isNotEmpty
-                                            ? firstName[0]
-                                                .toUpperCase()
-                                            : '?',
-                                      ),
-                                    ),
-                                    title: Text(
-                                      '$firstName $lastName',
-                                    ),
-                                    subtitle: Text(
-                                      company.isNotEmpty
-                                          ? '$email\n$company'
-                                          : email,
-                                    ),
-                                    isThreeLine:
-                                        company.isNotEmpty,
-                                    trailing: Row(
-                                      mainAxisSize:
-                                          MainAxisSize.min,
-                                      children: [
-                                        if (favorite)
-                                          const Icon(
-                                            Icons.star,
-                                            color: Colors.amber,
-                                          ),
-                                        IconButton(
-                                          onPressed: () {
-                                            showEditContactDialog(
-                                              contact,
-                                            );
-                                          },
-                                          icon: const Icon(
-                                            Icons.edit,
-                                          ),
-                                          tooltip: 'Edit',
-                                        ),
-                                        IconButton(
-                                          onPressed: () {
-                                            deleteContact(contact);
-                                          },
-                                          icon: const Icon(
-                                            Icons.delete_outline,
-                                          ),
-                                          tooltip: 'Delete',
-                                        
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
+          ),
+          buildCategoryFilters(),
+          Expanded(
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(),
+                  )
+                : contacts.isEmpty
+                    ? RefreshIndicator(
+                        onRefresh: loadContacts,
+                        child: ListView(
+                          physics:
+                              const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(height: 150),
+                            Icon(
+                              Icons.contacts_outlined,
+                              size: 64,
+                              color: Colors.grey,
                             ),
-            ),
-          ],
-        ),
+                            SizedBox(height: 12),
+                            Center(
+                              child: Text(
+                                'No contacts found',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: loadContacts,
+                        child: ListView.builder(
+                          physics:
+                              const AlwaysScrollableScrollPhysics(),
+                          itemCount: contacts.length,
+                          itemBuilder: (context, index) {
+                            return buildContactCard(
+                              contacts[index],
+                            );
+                          },
+                        ),
+                      ),
+          ),
+        ],
       ),
     );
   }

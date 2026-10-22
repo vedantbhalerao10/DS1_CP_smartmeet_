@@ -2,6 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import get_connection
 from .contact_routes import router as contact_router
+from .meeting_routes import router as meeting_router
+from .extraction_routes import router as extraction_router
+from .task_routes import router as task_router
+
 import subprocess
 import json
 
@@ -100,26 +104,7 @@ def cpp_contact_search(
     name: str,
     user_id: int = 1
 ):
-    contacts = get_contacts_from_database(
-        user_id
-    )
-
-@app.get("/contacts/cpp-category")
-def cpp_category_search(
-    category: str,
-    user_id: int = 1
-):
-    contacts = get_contacts_from_database(
-        user_id
-    )
-
-    request = {
-        "operation": "search_category",
-        "category": category,
-        "contacts": contacts
-    }
-
-    return run_cpp_engine(request)
+    contacts = get_contacts_from_database(user_id)
 
     request = {
         "operation": "search_name",
@@ -129,4 +114,23 @@ def cpp_category_search(
 
     return run_cpp_engine(request)
 
+
+@app.get("/contacts/cpp-category")
+def cpp_category_search(
+    category: str,
+    user_id: int = 1
+):
+    contacts = get_contacts_from_database(user_id)
+
+    request = {
+        "operation": "search_category",
+        "category": category,
+        "contacts": contacts
+    }
+
+    return run_cpp_engine(request)
+
 app.include_router(contact_router)
+app.include_router(meeting_router)
+app.include_router(extraction_router)
+app.include_router(task_router)
